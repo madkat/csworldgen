@@ -15,10 +15,11 @@
  *
  */
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#include <stdlib.h>
+#include <time.h>
 #include <sys/stat.h>
 #include <direct.h>
 
@@ -29,9 +30,9 @@ unsigned char bottom[1024][1024];
 unsigned char material[1024][1024];
 unsigned char fraction[1024][1024];
 unsigned char temp[1024][1024];
-unsigned int trees[32768];
-unsigned int crystals[256];
-unsigned int startPoint;
+unsigned int  trees[32768];
+unsigned int  crystals[512];
+unsigned int  startPoint;
 
 #define GRASS 2
 #define DIRT 4
@@ -41,7 +42,7 @@ unsigned int startPoint;
 
 char  outputDir[512] = ".";
 
-int   islandSeed = 2;
+int   islandSeed;
 float islandScale = 8.0f;
 int   islandOctaves = 3;
 float islandOctaveScale = 0.5f;
@@ -50,7 +51,7 @@ float islandEdge = 0.25f;
 float islandSize = 0.65f;
 float islandDensity = 0.5f;
 
-int   heightSeed = 3;
+int   heightSeed;
 float heightScale = 8.0f;
 int   heightOctaves = 3;
 float heightOctaveScale = 0.5f;
@@ -61,22 +62,22 @@ float heightBase = 128.0f;
 float heightTop = 192.0f;
 int   heightFalloff = 0;
 
-int   bottomSeed = 4;
+int   bottomSeed;
 float bottomAdd = 1.0f;
 int   bottomMinThick = 3;
 
-int   treeSeed = 5;
+int   treeSeed;
 float treeScale = 16.0f;
 int   treeOctaves = 1;
 float treeOctaveScale = 0.5f;
 float treeOctavePersistence = 0.5f;
 int   treeValueInvert = 0;
-int   treeSeedPos = 6;
+int   treeSeedPos;
 int   treeNumber = 1536;
 float treeDensity = 0.6f;
 int   treeFalloff = 0;
 
-int   crystalSeed = 7;
+int   crystalSeed;
 int   crystalGrassRadius = 16;
 int   crystalNumber = 4;
 int   crystalDistance = 128;
@@ -93,6 +94,17 @@ float falloff(int x, int y)
 	f = pow(f, 3.0f) + 1.0f;
 	f = LIMIT(f, 0.0f, 1.0f);
 	return f;
+}
+
+void initialize()
+{
+	srand(time(0));
+	islandSeed = rand();
+	heightSeed = rand();
+	bottomSeed = rand();
+	treeSeed = rand();
+	treeSeedPos = rand();
+	crystalSeed = rand();
 }
 
 void generateIsland()
@@ -286,7 +298,7 @@ void growCrystals()
 	int j = 0;
 	while(i < crystalNumber)
 	{
-		if(j++ > 65536) break;
+		if(j++ > 1024 * 1024 * 8) break;
 		int x = (rand() % (1022 - 2 * crystalGrassRadius)) + crystalGrassRadius + 1;
 		int y = (rand() % (1022 - 2 * crystalGrassRadius)) + crystalGrassRadius + 1;
 
@@ -345,12 +357,6 @@ void growCrystals()
 	printf(" done.\n");
 }
 
-int fileExists(const char* name)
-{
-	struct stat info;
-	return !stat(name, &info);
-}
-
 void writePGM(char* file, unsigned char* data, int width, int height)
 {
 	FILE* out = fopen(file, "wb");
@@ -370,6 +376,12 @@ void writePGMs()
 	writePGM(fname, &fraction[0][0], 1024, 1024);
 	sprintf(fname, "%s/bot.pgm", outputDir);
 	writePGM(fname, &bottom[0][0], 1024, 1024);
+}
+
+int fileExists(const char* name)
+{
+	struct stat info;
+	return !stat(name, &info);
 }
 
 void writeFiles()
@@ -439,6 +451,7 @@ void writeFiles()
 
 int main(int argc, char** argv)
 {
+	initialize();
 	generateIsland();
 	generateTop();
 	roundEdges();

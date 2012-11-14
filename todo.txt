@@ -1,4 +1,3 @@
-randomize parameters
 check results of float vs. double
 parameter parser
 parameter output

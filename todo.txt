@@ -1,0 +1,4 @@
+zielverzeichnis
+parameterausgabe
+randomize
+parameterparser

@@ -1,0 +1,10 @@
+13.11.2012:  (~400 loc w/o lib)
+switched noise generator from perlin to simplex noise function
+more parameters (octave scale and persistence for all 3 noise generators)
+added crystals and startpoint generation
+changed falloff function (linear to cubic)
+added invert option to height and tree noise functions
+added falloff option to height and tree noise functions
+
+12.11.2012:  first version (~250 loc w/o lib)
+

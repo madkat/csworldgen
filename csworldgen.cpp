@@ -19,6 +19,8 @@
 #include <string.h>
 #include <math.h>
 #include <stdlib.h>
+#include <sys/stat.h>
+#include <direct.h>
 
 #include "simplexnoise.h"
 
@@ -36,6 +38,8 @@ unsigned int startPoint;
 
 #define MIN(a, b) ((a < b) ? (a) : (b))
 #define LIMIT(a, min, max) ((a < min) ? (min) : ((a > max) ? (max) : (a)))
+
+char  outputDir[512] = ".";
 
 int   islandSeed = 2;
 float islandScale = 8.0f;
@@ -78,6 +82,8 @@ int   crystalNumber = 4;
 int   crystalDistance = 128;
 float crystalMaxSlope = 0.13f;
 int   crystalStartPointDistance = 8;
+
+int   pgmOut = 0;
 
 float falloff(int x, int y)
 {
@@ -339,55 +345,10 @@ void growCrystals()
 	printf(" done.\n");
 }
 
-void writeFiles()
+int fileExists(const char* name)
 {
-	printf("writing files: ");
-	FILE* monde;
-	for(int i = 0; i < 28; ++i)
-	{
-		if(i % 8 > 3) continue;
-
-		int isEmpty = 1;
-		for(int y = (i / 8) * 256; isEmpty && y < ((i / 8) + 1) * 256; ++y)
-		{
-			for(int x = (i % 8) * 256; isEmpty && x < ((i % 8) + 1) * 256; ++x)
-			{
-				if(material[y][x] != 0) isEmpty = 0;
-			}
-		}
-		if(isEmpty) continue;
-
-		char fname[100];
-		sprintf(fname, "Monde_%d", i);
-		monde = fopen(fname, "wb");
-
-		fwrite("\0\0", 1, 2, monde);
-		for(int y = (i / 8) * 256; y < ((i / 8) + 1) * 256; ++y)
-		{
-			for(int x = (i % 8) * 256; x < ((i % 8) + 1) * 256; ++x)
-			{
-				fwrite(&bottom[y][x], 1, 1, monde);
-				fwrite(&top[y][x], 1, 1, monde);
-				fwrite(&material[y][x], 1, 1, monde);
-				fwrite(&fraction[y][x], 1, 1, monde);
-			}
-		}
-		fclose(monde);
-	}
-
-	monde = fopen("Monde_Arbre", "wb");
-	fwrite(&trees[0], 4, treeNumber, monde);
-	fclose(monde);
-
-	monde = fopen("Monde_Doodads", "wb");
-	fprintf(monde, "StartingPoint %d ", startPoint);
-	for(int i = 0; i < crystalNumber; ++i)
-	{
-		fprintf(monde, "Crystal %d ", crystals[i]);
-	}
-	fclose(monde);
-
-	printf(" done.\n");
+	struct stat info;
+	return !stat(name, &info);
 }
 
 void writePGM(char* file, unsigned char* data, int width, int height)
@@ -400,10 +361,80 @@ void writePGM(char* file, unsigned char* data, int width, int height)
 
 void writePGMs()
 {
-	writePGM("mat.pgm", &material[0][0], 1024, 1024);
-	writePGM("top.pgm", &top[0][0], 1024, 1024);
-	writePGM("fra.pgm", &fraction[0][0], 1024, 1024);
-	writePGM("bot.pgm", &bottom[0][0], 1024, 1024);
+	char fname[512];
+	sprintf(fname, "%s/mat.pgm", outputDir);
+	writePGM(fname, &material[0][0], 1024, 1024);
+	sprintf(fname, "%s/top.pgm", outputDir);
+	writePGM(fname, &top[0][0], 1024, 1024);
+	sprintf(fname, "%s/fra.pgm", outputDir);
+	writePGM(fname, &fraction[0][0], 1024, 1024);
+	sprintf(fname, "%s/bot.pgm", outputDir);
+	writePGM(fname, &bottom[0][0], 1024, 1024);
+}
+
+void writeFiles()
+{
+	char fname[512];
+	FILE* out;
+
+	printf("writing files: ");
+
+	if(!fileExists(outputDir))
+	{
+		mkdir(outputDir);
+	}
+
+	for(int i = 0; i < 28; ++i)
+	{
+		if(i % 8 > 3) continue;
+
+		sprintf(fname, "%s/Monde_%d", outputDir, i);
+
+		int isEmpty = 1;
+		for(int y = (i / 8) * 256; isEmpty && y < ((i / 8) + 1) * 256; ++y)
+		{
+			for(int x = (i % 8) * 256; isEmpty && x < ((i % 8) + 1) * 256; ++x)
+			{
+				if(material[y][x] != 0) isEmpty = 0;
+			}
+		}
+		if(isEmpty){
+			if(fileExists(fname)) remove(fname);
+			continue;
+		}
+
+		out = fopen(fname, "wb");
+
+		fwrite("\0\0", 1, 2, out);
+		for(int y = (i / 8) * 256; y < ((i / 8) + 1) * 256; ++y)
+		{
+			for(int x = (i % 8) * 256; x < ((i % 8) + 1) * 256; ++x)
+			{
+				fwrite(&bottom[y][x], 1, 1, out);
+				fwrite(&top[y][x], 1, 1, out);
+				fwrite(&material[y][x], 1, 1, out);
+				fwrite(&fraction[y][x], 1, 1, out);
+			}
+		}
+		fclose(out);
+	}
+
+	sprintf(fname, "%s/Monde_Arbre", outputDir);
+	out = fopen(fname, "wb");
+	fwrite(&trees[0], 4, treeNumber, out);
+	fclose(out);
+
+	sprintf(fname, "%s/Monde_Doodads", outputDir);
+	out = fopen(fname, "wb");
+	fprintf(out, "StartingPoint %d ", startPoint);
+	for(int i = 0; i < crystalNumber; ++i)
+	{
+		fprintf(out, "Crystal %d ", crystals[i]);
+	}
+	fclose(out);
+
+	if(pgmOut) writePGMs();
+	printf(" done.\n");
 }
 
 int main(int argc, char** argv)
@@ -415,7 +446,6 @@ int main(int argc, char** argv)
 	plantTrees();
 	growCrystals();
 	writeFiles();
-	writePGMs();
 
 	system("pause");
 }

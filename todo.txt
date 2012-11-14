@@ -1,4 +1,4 @@
-zielverzeichnis
-parameterausgabe
-randomize
-parameterparser
+target directory
+randomize parameters
+parameter parser
+parameter output

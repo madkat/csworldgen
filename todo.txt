@@ -1,4 +1,10 @@
+0.9
+
 check results of float vs. double
 parameter parser
 parameter output
 error checking
+
+1.0
+
+incorporate user feedback

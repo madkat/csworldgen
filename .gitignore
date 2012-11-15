@@ -5,3 +5,6 @@
 *.ncb
 Debug
 World
+*.geany
+Makefile
+csworldgen

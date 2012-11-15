@@ -21,9 +21,83 @@
 #include <math.h>
 #include <time.h>
 #include <sys/stat.h>
+#ifdef _WIN32
 #include <direct.h>
+#endif
 
 #include "simplexnoise.h"
+
+char help[] = "output options\n\
+\n\
+-o     output directory - no default, mandatory\n\
+-pgm   write pgm files - default: 0\n\
+-info  write info file - default: 1\n\
+\n\
+noise function parameters for island outline\n\
+\n\
+-i     seed - default: random\n\
+-is    scale - default: 8.0\n\
+-io    number of octaves  - default: 3\n\
+-ios   scale factor for each octave - default: 0.5\n\
+-iop   persistence factor for each octave - default: 0.5\n\
+\n\
+other island outline parameters\n\
+\n\
+-ie    width of edge - default: 0.25\n\
+-iz    size - default: 0.65\n\
+-id    density - default: 0.5\n\
+\n\
+noise function parameters for terrain height\n\
+\n\
+-h     seed - default: random\n\
+-hs    scale - default: 8.0\n\
+-ho    number of octaves  - default: 3\n\
+-hos   scale factor for each octave - default: 0.5\n\
+-hop   persistence factor for each octave - default: 0.5\n\
+\n\
+other terrain height parameters\n\
+\n\
+-hb    base level - default: 128.0\n\
+-ht    top level - default: 192.0\n\
+-he    exponent - default: 4.0\n\
+-hi    invert noise value - default: 0\n\
+-hf    falloff to the outside- default: 0\n\
+\n\
+terrain bottom parameters\n\
+\n\
+-bs    seed - default: random\n\
+-ba    additional random part - default: 1.0\n\
+-bm    minimal thickness - default: 3\n\
+\n\
+noise function parameters for tree distribution\n\
+\n\
+-t     seed - default: random\n\
+-ts    scale - default: 32.0\n\
+-to    number of octaves  - default: 1\n\
+-tos   scale factor for each octave - default: 0.5\n\
+-top   persistence factor for each octave - default: 0.5\n\
+\n\
+other tree distribution parameters\n\
+\n\
+-tp    position seed - default: random\n\
+-tn    number - default: 1536\n\
+-td    density - default: 0.6\n\
+-ti    invert noise value - default: 0\n\
+-tf    falloff to the outside - default: 0\n\
+\n\
+crystal distribution parameters\n\
+\n\
+-c     position seed - default: random\n\
+-cr    radius that needs to be free - default: 16\n\
+-cn    number - default: 4\n\
+-cd    distance crystal to crystal - default: 128.0\n\
+-cs    allowed slope - default: 0.13\n\
+-csd   distance of start point - default: 8.0\n\
+\n\
+\n\
+\n\
+example call: csworldgen -o OutDir -i 5 -h 3 -ht 224.0 -t 7\n\
+everything but output directory is optional\n";
 
 unsigned char top[1024][1024];
 unsigned char bottom[1024][1024];
@@ -40,7 +114,7 @@ unsigned int  startPoint;
 #define MIN(a, b) ((a < b) ? (a) : (b))
 #define LIMIT(a, min, max) ((a < min) ? (min) : ((a > max) ? (max) : (a)))
 
-char  outputDir[512] = ".";
+char  outputDir[512] = "";
 
 int    islandSeed;
 double islandScale = 8.0;
@@ -56,10 +130,10 @@ double heightScale = 8.0;
 int    heightOctaves = 3;
 double heightOctaveScale = 0.5;
 double heightOctavePersistence = 0.5;
-int    heightValueInvert = 0;
-double heightExponent = 4.0;
 double heightBase = 128.0;
 double heightTop = 192.0;
+double heightExponent = 4.0;
+int    heightValueInvert = 0;
 int    heightFalloff = 0;
 
 int    bottomSeed;
@@ -67,14 +141,14 @@ double bottomAdd = 1.0;
 int    bottomMinThick = 3;
 
 int    treeSeed;
-double treeScale = 16.0;
+double treeScale = 32.0;
 int    treeOctaves = 1;
 double treeOctaveScale = 0.5;
 double treeOctavePersistence = 0.5;
-int    treeValueInvert = 0;
 int    treeSeedPos;
 int    treeNumber = 1536;
 double treeDensity = 0.6;
+int    treeValueInvert = 0;
 int    treeFalloff = 0;
 
 int    crystalSeed;
@@ -84,393 +158,394 @@ double crystalDistance = 128.0;
 double crystalMaxSlope = 0.13;
 double crystalStartPointDistance = 8.0;
 
-double pgmOut = 0;
+int    pgmOut = 0;
+int    infoOut = 1;
 
-typedef struct parameter
-{
-	char	name[64];
-	char	description[512];
-	double	default;
-} SParameter;
 
 double falloff(int x, int y)
 {
-	double fx = (x - 512.0) / 512.0;
-	double fy = (y - 512.0) / 512.0;
-	double f = ((islandSize - islandEdge) - sqrt(fx * fx + fy * fy)) / islandEdge;
-	f = pow(f, 3.0) + 1.0;
-	f = LIMIT(f, 0.0, 1.0);
-	return f;
+   double fx = (x - 512.0) / 512.0;
+   double fy = (y - 512.0) / 512.0;
+   double f = ((islandSize - islandEdge) - sqrt(fx * fx + fy * fy)) / islandEdge;
+   f = pow(f, 3.0) + 1.0;
+   f = LIMIT(f, 0.0, 1.0);
+   return f;
 }
 
 void initialize()
 {
-	srand(time(0));
-	islandSeed = rand();
-	heightSeed = rand();
-	bottomSeed = rand();
-	treeSeed = rand();
-	treeSeedPos = rand();
-	crystalSeed = rand();
+   srand(time(0));
+   islandSeed = rand() % 0x8000;
+   heightSeed = rand() % 0x8000;
+   bottomSeed = rand() % 0x8000;
+   treeSeed = rand() % 0x8000;
+   treeSeedPos = rand() % 0x8000;
+   crystalSeed = rand() % 0x8000;
+}
+
+void readParameters(int argc, char** argv)
+{
+
 }
 
 void generateIsland()
 {
-	printf("generating island outline: ");
-	init_noise(islandSeed);
-	for(int y = 0; y < 1024; ++y)
-	{
-		for(int x = 0; x < 1024; ++x)
-		{
-			double val = scaled_octave_noise_2d(islandOctaves, islandOctavePersistence, islandOctaveScale, 0.0, 1.0, x * islandScale / 1024, y * islandScale / 1024);
-			val *= falloff(x, y);
-			if(val > (1.0 - islandDensity)) material[y][x] = GRASS;
-		}
-	}
-	printf(" done.\n");
+   printf("generating island outline: ");
+   init_noise(islandSeed);
+   for(int y = 0; y < 1024; ++y)
+   {
+      for(int x = 0; x < 1024; ++x)
+      {
+         double val = scaled_octave_noise_2d(islandOctaves, islandOctavePersistence, islandOctaveScale, 0.0, 1.0, x * islandScale / 1024, y * islandScale / 1024);
+         val *= falloff(x, y);
+         if(val > (1.0 - islandDensity)) material[y][x] = GRASS;
+      }
+   }
+   printf(" done.\n");
 }
 
 void generateTop()
 {
-	printf("generating island top layer: ");
-	init_noise(heightSeed);
-	for(int y = 0; y < 1024; ++y)
-	{
-		for(int x = 0; x < 1024; ++x)
-		{
-			double val = scaled_octave_noise_2d(heightOctaves, heightOctavePersistence, heightOctaveScale, 0.0, 1.0, x * heightScale / 1024, y * heightScale / 1024);
-			if(heightFalloff) val *= falloff(x, y);
-			if(heightValueInvert) val = 1.0f - val;
-			double height = pow(val, heightExponent);
-			height = heightBase + (heightTop - heightBase) * height;
-			if(material[y][x] != 0)
-			{
-				top[y][x] = height;
-				fraction[y][x] = (height - top[y][x]) * 3.0 + 1.0;
-				bottom[y][x] = top[y][x] - bottomMinThick;
-			}
-		}
-	}
-	printf(" done.\n");
+   printf("generating island top layer: ");
+   init_noise(heightSeed);
+   for(int y = 0; y < 1024; ++y)
+   {
+      for(int x = 0; x < 1024; ++x)
+      {
+         double val = scaled_octave_noise_2d(heightOctaves, heightOctavePersistence, heightOctaveScale, 0.0, 1.0, x * heightScale / 1024, y * heightScale / 1024);
+         if(heightFalloff) val *= falloff(x, y);
+         if(heightValueInvert) val = 1.0f - val;
+         double height = pow(val, heightExponent);
+         height = heightBase + (heightTop - heightBase) * height;
+         if(material[y][x] != 0)
+         {
+            top[y][x] = height;
+            fraction[y][x] = (height - top[y][x]) * 3.0 + 1.0;
+            bottom[y][x] = top[y][x] - bottomMinThick;
+         }
+      }
+   }
+   printf(" done.\n");
 }
 
 void erode()
 {
-	for (int y = 1; y < 1023; ++y)
-	{
-		for (int x = 1; x < 1023; ++x)
-		{
-			if (  (material[y][x] == GRASS)
-			   && (material[y-1][x] == GRASS)
-			   && (material[y+1][x] == GRASS)
-			   && (material[y][x-1] == GRASS)
-			   && (material[y][x+1] == GRASS)
-			   )
-			{
-				temp[y][x] = 1;
-			}
-			else
-			{
-				temp[y][x] = 0;
-			}
-		}
-	}
+   for (int y = 1; y < 1023; ++y)
+   {
+      for (int x = 1; x < 1023; ++x)
+      {
+         if (  (material[y][x] == GRASS)
+            && (material[y-1][x] == GRASS)
+            && (material[y+1][x] == GRASS)
+            && (material[y][x-1] == GRASS)
+            && (material[y][x+1] == GRASS)
+            )
+         {
+            temp[y][x] = 1;
+         }
+         else
+         {
+            temp[y][x] = 0;
+         }
+      }
+   }
 }
 
 void roundEdges()
 {
-	printf("rounding edges: ");
-	erode();
-	for(int y = 0; y < 1024; ++y)
-	{
-		for(int x = 0; x < 1024; ++x)
-		{
-			if(material[y][x] == GRASS && temp[y][x] == 0)
-			{
-				material[y][x] = DIRT;
-				top[y][x] -= 1;
-				bottom[y][x] = top[y][x] - bottomMinThick;
-			}
-		}
-	}
+   printf("rounding edges: ");
+   erode();
+   for(int y = 0; y < 1024; ++y)
+   {
+      for(int x = 0; x < 1024; ++x)
+      {
+         if(material[y][x] == GRASS && temp[y][x] == 0)
+         {
+            material[y][x] = DIRT;
+            top[y][x] -= 1;
+            bottom[y][x] = top[y][x] - bottomMinThick;
+         }
+      }
+   }
 
-	erode();
-	for(int y = 0; y < 1024; ++y)
-	{
-		for(int x = 0; x < 1024; ++x)
-		{
-			if(material[y][x] == GRASS && temp[y][x] == 0)
-			{
-				material[y][x] = DIRT;
-				fraction[y][x] -=1;
-				if(fraction[y][x] == 0)
-				{
-					fraction[y][x] = 3;
-					top[y][x] -= 1;
-					bottom[y][x] = top[y][x] - bottomMinThick;
-				}
-			}
-		}
-	}
-	printf(" done.\n");
+   erode();
+   for(int y = 0; y < 1024; ++y)
+   {
+      for(int x = 0; x < 1024; ++x)
+      {
+         if(material[y][x] == GRASS && temp[y][x] == 0)
+         {
+            material[y][x] = DIRT;
+            fraction[y][x] -=1;
+            if(fraction[y][x] == 0)
+            {
+               fraction[y][x] = 3;
+               top[y][x] -= 1;
+               bottom[y][x] = top[y][x] - bottomMinThick;
+            }
+         }
+      }
+   }
+   printf(" done.\n");
 }
 
 void generateBottom()
 {
-	printf("generating bottom: ");
-	srand(bottomSeed);
-	for(;;)
-	{
-		int i = 0;
-		for(int y = 0; y < 1024; ++y)
-		{
-			for(int x = 0; x < 1024; ++x)
-			{
-				unsigned char max = 0;
-				if((unsigned char)(bottom[y-1][x] - 1) > max) max = (unsigned char)(bottom[y-1][x] - 1);
-				if((unsigned char)(bottom[y+1][x] - 1) > max) max = (unsigned char)(bottom[y+1][x] - 1);
-				if((unsigned char)(bottom[y][x-1] - 1) > max) max = (unsigned char)(bottom[y][x-1] - 1);
-				if((unsigned char)(bottom[y][x+1] - 1) > max) max = (unsigned char)(bottom[y][x+1] - 1);
-				
-				if(max < bottom[y][x])
-				{
-					temp[y][x] = max;
-					temp[y][x] -= (1.0 + bottomAdd) * rand() / (RAND_MAX + 1);
-					i++;
-				}
-				else
-				{
-					temp[y][x] = bottom[y][x];
-					if(bottom[y][x] != 0)
-					{
-						unsigned char thickness = top[y][x] - bottom[y][x];
-						unsigned char thicknessConstant = 1;
-						if(top[y-1][x] - bottom[y-1][x] != thickness) thicknessConstant = 0;
-						if(top[y+1][x] - bottom[y+1][x] != thickness) thicknessConstant = 0;
-						if(top[y][x-1] - bottom[y][x-1] != thickness) thicknessConstant = 0;
-						if(top[y][x+1] - bottom[y][x+1] != thickness) thicknessConstant = 0;
-						if(thicknessConstant)
-						{
-							temp[y][x] -= (1.0 + bottomAdd) * rand() / (RAND_MAX + 1);
-							i++;
-						}
-					}
-				}
-			}
-		}
-		memcpy(bottom, temp, 1024 * 1024);
-		if(i == 0) break;
-	}
-	printf(" done.\n");
+   printf("generating bottom: ");
+   srand(bottomSeed);
+   for(;;)
+   {
+      int i = 0;
+      for(int y = 0; y < 1024; ++y)
+      {
+         for(int x = 0; x < 1024; ++x)
+         {
+            unsigned char max = 0;
+            if((unsigned char)(bottom[y-1][x] - 1) > max) max = (unsigned char)(bottom[y-1][x] - 1);
+            if((unsigned char)(bottom[y+1][x] - 1) > max) max = (unsigned char)(bottom[y+1][x] - 1);
+            if((unsigned char)(bottom[y][x-1] - 1) > max) max = (unsigned char)(bottom[y][x-1] - 1);
+            if((unsigned char)(bottom[y][x+1] - 1) > max) max = (unsigned char)(bottom[y][x+1] - 1);
+
+            if(max < bottom[y][x])
+            {
+               temp[y][x] = max;
+               temp[y][x] -= (1.0 + bottomAdd) * rand() / ((long)RAND_MAX + 1);
+               i++;
+            }
+            else
+            {
+               temp[y][x] = bottom[y][x];
+               if(bottom[y][x] != 0)
+               {
+                  unsigned char thickness = top[y][x] - bottom[y][x];
+                  unsigned char thicknessConstant = 1;
+                  if(top[y-1][x] - bottom[y-1][x] != thickness) thicknessConstant = 0;
+                  if(top[y+1][x] - bottom[y+1][x] != thickness) thicknessConstant = 0;
+                  if(top[y][x-1] - bottom[y][x-1] != thickness) thicknessConstant = 0;
+                  if(top[y][x+1] - bottom[y][x+1] != thickness) thicknessConstant = 0;
+                  if(thicknessConstant)
+                  {
+                     temp[y][x] -= (1.0 + bottomAdd) * rand() / ((long)RAND_MAX + 1);
+                     i++;
+                  }
+               }
+            }
+         }
+      }
+      memcpy(bottom, temp, 1024 * 1024);
+      if(i == 0) break;
+   }
+   printf(" done.\n");
 }
 
 void plantTrees()
 {
-	printf("planting trees: ");
-	init_noise(treeSeed);
-	srand(treeSeedPos);
-	int i = 0;
-	int j = 0;
-	while(i < treeNumber)
-	{
-		if(j++ > 1024 * 1024 * 8) break;
-		
-		int x = rand() % 1024;
-		int y = rand() % 1024;
+   printf("planting trees: ");
+   init_noise(treeSeed);
+   srand(treeSeedPos);
+   int i = 0;
+   int j = 0;
+   while(i < treeNumber)
+   {
+      if(j++ > 1024 * 1024 * 8) break;
 
-		if(material[y][x] != GRASS) continue;
-		
-		double val = scaled_octave_noise_2d(treeOctaves, treeOctavePersistence, treeOctaveScale, 0.0, 1.0, x * treeScale / 1024, y * treeScale / 1024);
-		if(treeFalloff) val *= falloff(x, y);
-		if(treeValueInvert) val = 1.0 - val;
-		if(val > treeDensity)
-		{
-			trees[i++] = ((top[y][x] - 1) << 20) + (y << 10) + x;
-			material[y][x] = DIRT;
-		}
-	}
-	if(i < treeNumber)
-	{
-		printf("\ncould only plant %d trees\n", i);
-		treeNumber = i;
-	}
-	printf(" done.\n");
+      int x = rand() % 1024;
+      int y = rand() % 1024;
+
+      if(material[y][x] != GRASS) continue;
+
+      double val = scaled_octave_noise_2d(treeOctaves, treeOctavePersistence, treeOctaveScale, 0.0, 1.0, x * treeScale / 1024, y * treeScale / 1024);
+      if(treeFalloff) val *= falloff(x, y);
+      if(treeValueInvert) val = 1.0 - val;
+      if(val > treeDensity)
+      {
+         trees[i++] = ((top[y][x] - 1) << 20) + (y << 10) + x;
+         material[y][x] = DIRT;
+      }
+   }
+   if(i < treeNumber)
+   {
+      printf("\ncould only plant %d trees\n", i);
+      treeNumber = i;
+   }
+   printf(" done.\n");
 }
 
 void growCrystals()
 {
-	printf("growing crystals: ");
-	srand(crystalSeed);
-	int i = 0;
-	int j = 0;
-	while(i < crystalNumber)
-	{
-		if(j++ > 1024 * 1024 * 8) break;
-		int x = (rand() % (1022 - 2 * crystalGrassRadius)) + crystalGrassRadius + 1;
-		int y = (rand() % (1022 - 2 * crystalGrassRadius)) + crystalGrassRadius + 1;
+   printf("growing crystals: ");
+   srand(crystalSeed);
+   int i = 0;
+   int j = 0;
+   while(i < crystalNumber)
+   {
+      if(j++ > 1024 * 1024 * 8) break;
+      int x = (rand() % (1022 - 2 * crystalGrassRadius)) + crystalGrassRadius + 1;
+      int y = (rand() % (1022 - 2 * crystalGrassRadius)) + crystalGrassRadius + 1;
 
-		if(material[y][x] != GRASS) continue;
+      if(material[y][x] != GRASS) continue;
 
-		unsigned char isOK = 1;
-		for(int j = 0; isOK && j < i; j++)
-		{
-			int dx = crystals[j] % 1024 - x;
-			int dy = (crystals[j] >> 10) % 1024 - y;
-			if(dx * dx + dy * dy < crystalDistance * crystalDistance) isOK = 0;
-		}
-		if(!isOK) continue;
+      unsigned char isOK = 1;
+      for(int j = 0; isOK && j < i; j++)
+      {
+         int dx = crystals[j] % 1024 - x;
+         int dy = (crystals[j] >> 10) % 1024 - y;
+         if(dx * dx + dy * dy < crystalDistance * crystalDistance) isOK = 0;
+      }
+      if(!isOK) continue;
 
-		if(fabs((double)(top[y][x] - top[y - crystalGrassRadius][x]) / crystalGrassRadius) > crystalMaxSlope) isOK = 0;
-		if(fabs((double)(top[y][x] - top[y + crystalGrassRadius][x]) / crystalGrassRadius) > crystalMaxSlope) isOK = 0;
-		if(fabs((double)(top[y][x] - top[y][x - crystalGrassRadius]) / crystalGrassRadius) > crystalMaxSlope) isOK = 0;
-		if(fabs((double)(top[y][x] - top[y][x + crystalGrassRadius]) / crystalGrassRadius) > crystalMaxSlope) isOK = 0;
-		if(fabs((double)(top[y][x] - top[y - crystalGrassRadius / 2][x]) / (crystalGrassRadius / 2)) > crystalMaxSlope) isOK = 0;
-		if(fabs((double)(top[y][x] - top[y + crystalGrassRadius / 2][x]) / (crystalGrassRadius / 2)) > crystalMaxSlope) isOK = 0;
-		if(fabs((double)(top[y][x] - top[y][x - crystalGrassRadius / 2]) / (crystalGrassRadius / 2)) > crystalMaxSlope) isOK = 0;
-		if(fabs((double)(top[y][x] - top[y][x + crystalGrassRadius / 2]) / (crystalGrassRadius / 2)) > crystalMaxSlope) isOK = 0;
-		if(!isOK) continue;
+      if(fabs((double)(top[y][x] - top[y - crystalGrassRadius][x]) / crystalGrassRadius) > crystalMaxSlope) isOK = 0;
+      if(fabs((double)(top[y][x] - top[y + crystalGrassRadius][x]) / crystalGrassRadius) > crystalMaxSlope) isOK = 0;
+      if(fabs((double)(top[y][x] - top[y][x - crystalGrassRadius]) / crystalGrassRadius) > crystalMaxSlope) isOK = 0;
+      if(fabs((double)(top[y][x] - top[y][x + crystalGrassRadius]) / crystalGrassRadius) > crystalMaxSlope) isOK = 0;
+      if(fabs((double)(top[y][x] - top[y - crystalGrassRadius / 2][x]) / (crystalGrassRadius / 2)) > crystalMaxSlope) isOK = 0;
+      if(fabs((double)(top[y][x] - top[y + crystalGrassRadius / 2][x]) / (crystalGrassRadius / 2)) > crystalMaxSlope) isOK = 0;
+      if(fabs((double)(top[y][x] - top[y][x - crystalGrassRadius / 2]) / (crystalGrassRadius / 2)) > crystalMaxSlope) isOK = 0;
+      if(fabs((double)(top[y][x] - top[y][x + crystalGrassRadius / 2]) / (crystalGrassRadius / 2)) > crystalMaxSlope) isOK = 0;
+      if(!isOK) continue;
 
-		for(int ty = y - crystalGrassRadius; isOK && ty < y + crystalGrassRadius; ++ty)
-		{
-			for(int tx = x - crystalGrassRadius; isOK && tx < x + crystalGrassRadius; ++tx)
-			{
-				int dx = tx - x;
-				int dy = ty - y;
-				if(dx * dx + dy * dy <= crystalGrassRadius * crystalGrassRadius && material[ty][tx] != GRASS) isOK = 0;
-			}
-		}
-		if(!isOK) continue;
+      for(int ty = y - crystalGrassRadius; isOK && ty < y + crystalGrassRadius; ++ty)
+      {
+         for(int tx = x - crystalGrassRadius; isOK && tx < x + crystalGrassRadius; ++tx)
+         {
+            int dx = tx - x;
+            int dy = ty - y;
+            if(dx * dx + dy * dy <= crystalGrassRadius * crystalGrassRadius && material[ty][tx] != GRASS) isOK = 0;
+         }
+      }
+      if(!isOK) continue;
 
-		crystals[i] = ((top[y][x] - 1) << 20) + (y << 10) + x;
-		i++;
-	}
+      crystals[i] = ((top[y][x] - 1) << 20) + (y << 10) + x;
+      i++;
+   }
 
-	if(i < crystalNumber)
-	{
-		printf("\ncould only grow %d crystals\n", i);
-		crystalNumber = i;
-	}
+   if(i < crystalNumber)
+   {
+      printf("\ncould only grow %d crystals\n", i);
+      crystalNumber = i;
+   }
 
-	if(crystalNumber)
-	{
-		double angle = 2 * M_PI * rand() / (RAND_MAX + 1);
-		int dx = cos(angle) * crystalStartPointDistance;
-		int dy = sin(angle) * crystalStartPointDistance;
-		int x = crystals[0] % 1024 + dx;
-		int y = (crystals[0] >> 10) % 1024 + dy;
-		startPoint = ((top[y][x] - 1) << 20) + (y << 10) + x;
-	}
-	else
-	{
-		printf("warning: no crystals, start point will be invalid\n");
-	}
+   if(crystalNumber)
+   {
+      double angle = 2 * M_PI * rand() / ((long)RAND_MAX + 1);
+      int dx = cos(angle) * crystalStartPointDistance;
+      int dy = sin(angle) * crystalStartPointDistance;
+      int x = crystals[0] % 1024 + dx;
+      int y = (crystals[0] >> 10) % 1024 + dy;
+      startPoint = ((top[y][x] - 1) << 20) + (y << 10) + x;
+   }
+   else
+   {
+      printf("warning: no crystals, start point will be invalid\n");
+   }
 
-	printf(" done.\n");
+   printf(" done.\n");
 }
 
 void writePGM(char* file, unsigned char* data, int width, int height)
 {
-	FILE* out = fopen(file, "wb");
-	fprintf(out, "P5\n%d %d\n255\n", width, height);
-	fwrite(data, 1, width*height, out);
-	fclose(out);
+   FILE* out = fopen(file, "wb");
+   fprintf(out, "P5\n%d %d\n255\n", width, height);
+   fwrite(data, 1, width*height, out);
+   fclose(out);
 }
 
 void writePGMs()
 {
-	char fname[512];
-	sprintf(fname, "%s/mat.pgm", outputDir);
-	writePGM(fname, &material[0][0], 1024, 1024);
-	sprintf(fname, "%s/top.pgm", outputDir);
-	writePGM(fname, &top[0][0], 1024, 1024);
-	sprintf(fname, "%s/fra.pgm", outputDir);
-	writePGM(fname, &fraction[0][0], 1024, 1024);
-	sprintf(fname, "%s/bot.pgm", outputDir);
-	writePGM(fname, &bottom[0][0], 1024, 1024);
+   char fname[512];
+   sprintf(fname, "%s/mat.pgm", outputDir);
+   writePGM(fname, &material[0][0], 1024, 1024);
+   sprintf(fname, "%s/top.pgm", outputDir);
+   writePGM(fname, &top[0][0], 1024, 1024);
+   sprintf(fname, "%s/fra.pgm", outputDir);
+   writePGM(fname, &fraction[0][0], 1024, 1024);
+   sprintf(fname, "%s/bot.pgm", outputDir);
+   writePGM(fname, &bottom[0][0], 1024, 1024);
 }
 
 int fileExists(const char* name)
 {
-	struct stat info;
-	return !stat(name, &info);
+   struct stat info;
+   return !stat(name, &info);
 }
 
 void writeFiles()
 {
-	char fname[512];
-	FILE* out;
+   char fname[512];
+   FILE* out;
 
-	printf("writing files: ");
+   printf("writing files: ");
 
-	if(!fileExists(outputDir))
-	{
-		mkdir(outputDir);
-	}
+   if(!fileExists(outputDir))
+   {
+      #ifdef _WIN32
+      mkdir(outputDir);
+      #else
+      mkdir(outputDir, 0777);
+      #endif
+   }
 
-	for(int i = 0; i < 28; ++i)
-	{
-		if(i % 8 > 3) continue;
+   for(int i = 0; i < 28; ++i)
+   {
+      if(i % 8 > 3) continue;
 
-		sprintf(fname, "%s/Monde_%d", outputDir, i);
+      sprintf(fname, "%s/Monde_%d", outputDir, i);
 
-		int isEmpty = 1;
-		for(int y = (i / 8) * 256; isEmpty && y < ((i / 8) + 1) * 256; ++y)
-		{
-			for(int x = (i % 8) * 256; isEmpty && x < ((i % 8) + 1) * 256; ++x)
-			{
-				if(material[y][x] != 0) isEmpty = 0;
-			}
-		}
-		if(isEmpty){
-			if(fileExists(fname)) remove(fname);
-			continue;
-		}
+      int isEmpty = 1;
+      for(int y = (i / 8) * 256; isEmpty && y < ((i / 8) + 1) * 256; ++y)
+      {
+         for(int x = (i % 8) * 256; isEmpty && x < ((i % 8) + 1) * 256; ++x)
+         {
+            if(material[y][x] != 0) isEmpty = 0;
+         }
+      }
+      if(isEmpty){
+         if(fileExists(fname)) remove(fname);
+         continue;
+      }
 
-		out = fopen(fname, "wb");
+      out = fopen(fname, "wb");
 
-		fwrite("\0\0", 1, 2, out);
-		for(int y = (i / 8) * 256; y < ((i / 8) + 1) * 256; ++y)
-		{
-			for(int x = (i % 8) * 256; x < ((i % 8) + 1) * 256; ++x)
-			{
-				fwrite(&bottom[y][x], 1, 1, out);
-				fwrite(&top[y][x], 1, 1, out);
-				fwrite(&material[y][x], 1, 1, out);
-				fwrite(&fraction[y][x], 1, 1, out);
-			}
-		}
-		fclose(out);
-	}
+      fwrite("\0\0", 1, 2, out);
+      for(int y = (i / 8) * 256; y < ((i / 8) + 1) * 256; ++y)
+      {
+         for(int x = (i % 8) * 256; x < ((i % 8) + 1) * 256; ++x)
+         {
+            fwrite(&bottom[y][x], 1, 1, out);
+            fwrite(&top[y][x], 1, 1, out);
+            fwrite(&material[y][x], 1, 1, out);
+            fwrite(&fraction[y][x], 1, 1, out);
+         }
+      }
+      fclose(out);
+   }
 
-	sprintf(fname, "%s/Monde_Arbre", outputDir);
-	out = fopen(fname, "wb");
-	fwrite(&trees[0], 4, treeNumber, out);
-	fclose(out);
+   sprintf(fname, "%s/Monde_Arbre", outputDir);
+   out = fopen(fname, "wb");
+   fwrite(&trees[0], 4, treeNumber, out);
+   fclose(out);
 
-	sprintf(fname, "%s/Monde_Doodads", outputDir);
-	out = fopen(fname, "wb");
-	fprintf(out, "StartingPoint %d ", startPoint);
-	for(int i = 0; i < crystalNumber; ++i)
-	{
-		fprintf(out, "Crystal %d ", crystals[i]);
-	}
-	fclose(out);
+   sprintf(fname, "%s/Monde_Doodads", outputDir);
+   out = fopen(fname, "wb");
+   fprintf(out, "StartingPoint %d ", startPoint);
+   for(int i = 0; i < crystalNumber; ++i)
+   {
+      fprintf(out, "Crystal %d ", crystals[i]);
+   }
+   fclose(out);
 
-	if(pgmOut) writePGMs();
-	printf(" done.\n");
+   if(pgmOut) writePGMs();
+   printf(" done.\n");
 }
 
 int main(int argc, char** argv)
 {
-	initialize();
-	generateIsland();
-	generateTop();
-	roundEdges();
-	generateBottom();
-	plantTrees();
-	growCrystals();
-	writeFiles();
-
-	system("pause");
+   initialize();
+   generateIsland();
+   generateTop();
+   roundEdges();
+   generateBottom();
+   plantTrees();
+   growCrystals();
+   writeFiles();
 }
-

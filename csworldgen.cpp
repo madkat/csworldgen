@@ -42,57 +42,64 @@ unsigned int  startPoint;
 
 char  outputDir[512] = ".";
 
-int   islandSeed;
-float islandScale = 8.0f;
-int   islandOctaves = 3;
-float islandOctaveScale = 0.5f;
-float islandOctavePersistence = 0.5f;
-float islandEdge = 0.25f;
-float islandSize = 0.65f;
-float islandDensity = 0.5f;
+int    islandSeed;
+double islandScale = 8.0;
+int    islandOctaves = 3;
+double islandOctaveScale = 0.5;
+double islandOctavePersistence = 0.5;
+double islandEdge = 0.25;
+double islandSize = 0.65;
+double islandDensity = 0.5;
 
-int   heightSeed;
-float heightScale = 8.0f;
-int   heightOctaves = 3;
-float heightOctaveScale = 0.5f;
-float heightOctavePersistence = 0.5f;
-int   heightValueInvert = 0;
-float heightExponent = 4.0f;
-float heightBase = 128.0f;
-float heightTop = 192.0f;
-int   heightFalloff = 0;
+int    heightSeed;
+double heightScale = 8.0;
+int    heightOctaves = 3;
+double heightOctaveScale = 0.5;
+double heightOctavePersistence = 0.5;
+int    heightValueInvert = 0;
+double heightExponent = 4.0;
+double heightBase = 128.0;
+double heightTop = 192.0;
+int    heightFalloff = 0;
 
-int   bottomSeed;
-float bottomAdd = 1.0f;
-int   bottomMinThick = 3;
+int    bottomSeed;
+double bottomAdd = 1.0;
+int    bottomMinThick = 3;
 
-int   treeSeed;
-float treeScale = 16.0f;
-int   treeOctaves = 1;
-float treeOctaveScale = 0.5f;
-float treeOctavePersistence = 0.5f;
-int   treeValueInvert = 0;
-int   treeSeedPos;
-int   treeNumber = 1536;
-float treeDensity = 0.6f;
-int   treeFalloff = 0;
+int    treeSeed;
+double treeScale = 16.0;
+int    treeOctaves = 1;
+double treeOctaveScale = 0.5;
+double treeOctavePersistence = 0.5;
+int    treeValueInvert = 0;
+int    treeSeedPos;
+int    treeNumber = 1536;
+double treeDensity = 0.6;
+int    treeFalloff = 0;
 
-int   crystalSeed;
-int   crystalGrassRadius = 16;
-int   crystalNumber = 4;
-int   crystalDistance = 128;
-float crystalMaxSlope = 0.13f;
-int   crystalStartPointDistance = 8;
+int    crystalSeed;
+int    crystalGrassRadius = 16;
+int    crystalNumber = 4;
+double crystalDistance = 128.0;
+double crystalMaxSlope = 0.13;
+double crystalStartPointDistance = 8.0;
 
-int   pgmOut = 0;
+double pgmOut = 0;
 
-float falloff(int x, int y)
+typedef struct parameter
 {
-	float fx = ((float)x - 512) / 512;
-	float fy = ((float)y - 512) / 512;
-	float f = ((islandSize - islandEdge) - sqrt(fx * fx + fy * fy)) / islandEdge;
-	f = pow(f, 3.0f) + 1.0f;
-	f = LIMIT(f, 0.0f, 1.0f);
+	char	name[64];
+	char	description[512];
+	double	default;
+} SParameter;
+
+double falloff(int x, int y)
+{
+	double fx = (x - 512.0) / 512.0;
+	double fy = (y - 512.0) / 512.0;
+	double f = ((islandSize - islandEdge) - sqrt(fx * fx + fy * fy)) / islandEdge;
+	f = pow(f, 3.0) + 1.0;
+	f = LIMIT(f, 0.0, 1.0);
 	return f;
 }
 
@@ -115,7 +122,7 @@ void generateIsland()
 	{
 		for(int x = 0; x < 1024; ++x)
 		{
-			float val = scaled_octave_noise_2d(islandOctaves, islandOctavePersistence, islandOctaveScale, 0.0, 1.0, x * islandScale / 1024, y * islandScale / 1024);
+			double val = scaled_octave_noise_2d(islandOctaves, islandOctavePersistence, islandOctaveScale, 0.0, 1.0, x * islandScale / 1024, y * islandScale / 1024);
 			val *= falloff(x, y);
 			if(val > (1.0 - islandDensity)) material[y][x] = GRASS;
 		}
@@ -131,15 +138,15 @@ void generateTop()
 	{
 		for(int x = 0; x < 1024; ++x)
 		{
-			float val = scaled_octave_noise_2d(heightOctaves, heightOctavePersistence, heightOctaveScale, 0.0, 1.0, x * heightScale / 1024, y * heightScale / 1024);
+			double val = scaled_octave_noise_2d(heightOctaves, heightOctavePersistence, heightOctaveScale, 0.0, 1.0, x * heightScale / 1024, y * heightScale / 1024);
 			if(heightFalloff) val *= falloff(x, y);
 			if(heightValueInvert) val = 1.0f - val;
-			float height = pow(val, heightExponent);
+			double height = pow(val, heightExponent);
 			height = heightBase + (heightTop - heightBase) * height;
 			if(material[y][x] != 0)
 			{
-				top[y][x] = (int)height;
-				fraction[y][x] = (int)((height - (int)height) * 3 + 1);
+				top[y][x] = height;
+				fraction[y][x] = (height - top[y][x]) * 3.0 + 1.0;
 				bottom[y][x] = top[y][x] - bottomMinThick;
 			}
 		}
@@ -228,7 +235,7 @@ void generateBottom()
 				if(max < bottom[y][x])
 				{
 					temp[y][x] = max;
-					temp[y][x] -= (int)((1.0 + bottomAdd) * rand() / (RAND_MAX + 1));
+					temp[y][x] -= (1.0 + bottomAdd) * rand() / (RAND_MAX + 1);
 					i++;
 				}
 				else
@@ -244,7 +251,7 @@ void generateBottom()
 						if(top[y][x+1] - bottom[y][x+1] != thickness) thicknessConstant = 0;
 						if(thicknessConstant)
 						{
-							temp[y][x] -= (int)((1.0 + bottomAdd) * rand() / (RAND_MAX + 1));
+							temp[y][x] -= (1.0 + bottomAdd) * rand() / (RAND_MAX + 1);
 							i++;
 						}
 					}
@@ -273,9 +280,9 @@ void plantTrees()
 
 		if(material[y][x] != GRASS) continue;
 		
-		float val = scaled_octave_noise_2d(treeOctaves, treeOctavePersistence, treeOctaveScale, 0.0, 1.0, x * treeScale / 1024, y * treeScale / 1024);
+		double val = scaled_octave_noise_2d(treeOctaves, treeOctavePersistence, treeOctaveScale, 0.0, 1.0, x * treeScale / 1024, y * treeScale / 1024);
 		if(treeFalloff) val *= falloff(x, y);
-		if(treeValueInvert) val = 1.0f - val;
+		if(treeValueInvert) val = 1.0 - val;
 		if(val > treeDensity)
 		{
 			trees[i++] = ((top[y][x] - 1) << 20) + (y << 10) + x;
@@ -313,14 +320,14 @@ void growCrystals()
 		}
 		if(!isOK) continue;
 
-		if(fabs((float)(top[y][x] - top[y - crystalGrassRadius][x]) / crystalGrassRadius) > crystalMaxSlope) isOK = 0;
-		if(fabs((float)(top[y][x] - top[y + crystalGrassRadius][x]) / crystalGrassRadius) > crystalMaxSlope) isOK = 0;
-		if(fabs((float)(top[y][x] - top[y][x - crystalGrassRadius]) / crystalGrassRadius) > crystalMaxSlope) isOK = 0;
-		if(fabs((float)(top[y][x] - top[y][x + crystalGrassRadius]) / crystalGrassRadius) > crystalMaxSlope) isOK = 0;
-		if(fabs((float)(top[y][x] - top[y - crystalGrassRadius / 2][x]) / (crystalGrassRadius / 2)) > crystalMaxSlope) isOK = 0;
-		if(fabs((float)(top[y][x] - top[y + crystalGrassRadius / 2][x]) / (crystalGrassRadius / 2)) > crystalMaxSlope) isOK = 0;
-		if(fabs((float)(top[y][x] - top[y][x - crystalGrassRadius / 2]) / (crystalGrassRadius / 2)) > crystalMaxSlope) isOK = 0;
-		if(fabs((float)(top[y][x] - top[y][x + crystalGrassRadius / 2]) / (crystalGrassRadius / 2)) > crystalMaxSlope) isOK = 0;
+		if(fabs((double)(top[y][x] - top[y - crystalGrassRadius][x]) / crystalGrassRadius) > crystalMaxSlope) isOK = 0;
+		if(fabs((double)(top[y][x] - top[y + crystalGrassRadius][x]) / crystalGrassRadius) > crystalMaxSlope) isOK = 0;
+		if(fabs((double)(top[y][x] - top[y][x - crystalGrassRadius]) / crystalGrassRadius) > crystalMaxSlope) isOK = 0;
+		if(fabs((double)(top[y][x] - top[y][x + crystalGrassRadius]) / crystalGrassRadius) > crystalMaxSlope) isOK = 0;
+		if(fabs((double)(top[y][x] - top[y - crystalGrassRadius / 2][x]) / (crystalGrassRadius / 2)) > crystalMaxSlope) isOK = 0;
+		if(fabs((double)(top[y][x] - top[y + crystalGrassRadius / 2][x]) / (crystalGrassRadius / 2)) > crystalMaxSlope) isOK = 0;
+		if(fabs((double)(top[y][x] - top[y][x - crystalGrassRadius / 2]) / (crystalGrassRadius / 2)) > crystalMaxSlope) isOK = 0;
+		if(fabs((double)(top[y][x] - top[y][x + crystalGrassRadius / 2]) / (crystalGrassRadius / 2)) > crystalMaxSlope) isOK = 0;
 		if(!isOK) continue;
 
 		for(int ty = y - crystalGrassRadius; isOK && ty < y + crystalGrassRadius; ++ty)
@@ -346,12 +353,16 @@ void growCrystals()
 
 	if(crystalNumber)
 	{
-		float angle = 2 * (float)M_PI * rand() / (RAND_MAX + 1);
-		int dx = (int)(cos(angle) * crystalStartPointDistance);
-		int dy = (int)(sin(angle) * crystalStartPointDistance);
+		double angle = 2 * M_PI * rand() / (RAND_MAX + 1);
+		int dx = cos(angle) * crystalStartPointDistance;
+		int dy = sin(angle) * crystalStartPointDistance;
 		int x = crystals[0] % 1024 + dx;
 		int y = (crystals[0] >> 10) % 1024 + dy;
 		startPoint = ((top[y][x] - 1) << 20) + (y << 10) + x;
+	}
+	else
+	{
+		printf("warning: no crystals, start point will be invalid\n");
 	}
 
 	printf(" done.\n");

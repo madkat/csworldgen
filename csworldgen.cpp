@@ -27,7 +27,9 @@
 
 #include "simplexnoise.h"
 
-char help[] = "\n\noutput options\n\
+char version[] = "0.9";
+
+char help[] = "\ncsworldgen %s\n\noutput options\n\
 \n\
 -o     output directory - no default, mandatory\n\
 -pgm   write pgm files - default: 0\n\
@@ -173,7 +175,7 @@ void checkHelp(int argc, char** argv)
 	      )
 	   )
 	{
-		printf(help);
+		printf(help, version);
 		exit(EXIT_SUCCESS);
 	}
 }
@@ -556,7 +558,7 @@ void writeInfoFile()
 	sprintf(fname, "%s/csworldgen.info", outputDir);
 	FILE* out = fopen(fname, "w");
 	checkError(out, fname);
-	fprintf(out, "Generated with csworldgen 0.9 (https://github.com/Draradech/csworldgen)\n");
+	fprintf(out, "Generated with csworldgen %s (https://github.com/Draradech/csworldgen)\n", version);
 	fprintf(out, "\n");
 	fprintf(out, "generation parameters:\n");
 	fprintf(out, "-i %d -is %lf -io %d -ios %lf -iop %lf ", islandSeed, islandScale, islandOctaves, islandOctaveScale, islandOctavePersistence);

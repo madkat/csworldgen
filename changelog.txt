@@ -1,3 +1,8 @@
+16.11.2012:
+parse parameters
+write parameters
+basic error checking
+
 15.11.2012:
 switch everything to double
 add helpstring

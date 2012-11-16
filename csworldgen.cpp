@@ -174,7 +174,7 @@ void checkHelp(int argc, char** argv)
 	   )
 	{
 		printf(help);
-		exit(0);
+		exit(EXIT_SUCCESS);
 	}
 }
 
@@ -245,13 +245,13 @@ void readParameters(int argc, char** argv)
 		else
 		{
 			printf("error at or before commandline parameter %d: %s\n", i, argv[i]);
-			exit(1);
+			exit(EXIT_FAILURE);
 		}
 	}
 	if(!strcmp(outputDir, ""))
 	{
 		printf("output directory is mandatory and can't be empty.\n");
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 }
 
@@ -273,7 +273,7 @@ void generateIsland()
 	{
 		for(int x = 0; x < 1024; ++x)
 		{
-			double val = scaled_octave_noise_2d(islandOctaves, islandOctavePersistence, islandOctaveScale, 0.0, 1.0, x * islandScale / 1024, y * islandScale / 1024);
+			double val = scaled_octave_noise_2d(islandOctaves, islandOctavePersistence, islandOctaveScale, 0.0, 1.0, (x - 512) * islandScale / 1024, (y - 512) * islandScale / 1024);
 			val *= falloff(x, y);
 			if(val > (1.0 - islandDensity)) material[y][x] = GRASS;
 		}
@@ -289,7 +289,7 @@ void generateTop()
 	{
 		for(int x = 0; x < 1024; ++x)
 		{
-			double val = scaled_octave_noise_2d(heightOctaves, heightOctavePersistence, heightOctaveScale, 0.0, 1.0, x * heightScale / 1024, y * heightScale / 1024);
+			double val = scaled_octave_noise_2d(heightOctaves, heightOctavePersistence, heightOctaveScale, 0.0, 1.0, (x - 512) * heightScale / 1024, (y - 512) * heightScale / 1024);
 			if(heightFalloff) val *= falloff(x, y);
 			if(heightValueInvert) val = 1.0f - val;
 			double height = pow(val, heightExponent);
@@ -431,7 +431,7 @@ void plantTrees()
 
 		if(material[y][x] != GRASS) continue;
 
-		double val = scaled_octave_noise_2d(treeOctaves, treeOctavePersistence, treeOctaveScale, 0.0, 1.0, x * treeScale / 1024, y * treeScale / 1024);
+		double val = scaled_octave_noise_2d(treeOctaves, treeOctavePersistence, treeOctaveScale, 0.0, 1.0, (x - 512) * treeScale / 1024, (y - 512) * treeScale / 1024);
 		if(treeFalloff) val *= falloff(x, y);
 		if(treeValueInvert) val = 1.0 - val;
 		if(val > treeDensity)
@@ -519,9 +519,19 @@ void growCrystals()
 	printf(" done.\n");
 }
 
-void writePGM(char* file, unsigned char* data, int width, int height)
+void checkError(FILE* out, char* fname)
 {
-	FILE* out = fopen(file, "wb");
+	if(!out)
+	{
+		printf("Could not open %s, aborting", fname);
+		exit(EXIT_FAILURE);
+	}
+}
+
+void writePGM(char* fname, unsigned char* data, int width, int height)
+{
+	FILE* out = fopen(fname, "wb");
+	checkError(out, fname);
 	fprintf(out, "P5\n%d %d\n255\n", width, height);
 	fwrite(data, 1, width*height, out);
 	fclose(out);
@@ -545,6 +555,7 @@ void writeInfoFile()
 	char fname[512];
 	sprintf(fname, "%s/csworldgen.info", outputDir);
 	FILE* out = fopen(fname, "w");
+	checkError(out, fname);
 	fprintf(out, "Generated with csworldgen 0.9 (https://github.com/Draradech/csworldgen)\n");
 	fprintf(out, "\n");
 	fprintf(out, "generation parameters:\n");
@@ -574,11 +585,17 @@ void writeFiles()
 
 	if(!fileExists(outputDir))
 	{
+		int status;
 		#ifdef _WIN32
-		mkdir(outputDir);
+		status = mkdir(outputDir);
 		#else
-		mkdir(outputDir, 0777);
+		status = mkdir(outputDir, 0777);
 		#endif
+		if(status)
+		{
+			printf("Could not create output directory %s, aborting\n", outputDir);
+			exit(EXIT_FAILURE);
+		}
 	}
 
 	for(int i = 0; i < 28; ++i)
@@ -601,6 +618,7 @@ void writeFiles()
 		}
 
 		out = fopen(fname, "wb");
+		checkError(out, fname);
 
 		fwrite("\0\0", 1, 2, out);
 		for(int y = (i / 8) * 256; y < ((i / 8) + 1) * 256; ++y)
@@ -618,11 +636,13 @@ void writeFiles()
 
 	sprintf(fname, "%s/Monde_Arbre", outputDir);
 	out = fopen(fname, "wb");
+	checkError(out, fname);
 	fwrite(&trees[0], 4, treeNumber, out);
 	fclose(out);
 
 	sprintf(fname, "%s/Monde_Doodads", outputDir);
 	out = fopen(fname, "wb");
+	checkError(out, fname);
 	fprintf(out, "StartingPoint %d ", startPoint);
 	for(int i = 0; i < crystalNumber; ++i)
 	{

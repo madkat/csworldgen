@@ -1,7 +1,5 @@
 0.9
 
-parameter parser
-parameter output
 error checking
 
 1.0

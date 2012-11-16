@@ -8,3 +8,8 @@ World
 *.geany
 Makefile
 csworldgen
+*.opensdf
+*.sdf
+*.vcxproj
+*.vcxproj.filters
+ipch
